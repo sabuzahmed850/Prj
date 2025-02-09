@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tree Visualizer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        svg { border: 1px solid black; }
+        input, button, select { margin: 10px; padding: 5px; }
+    </style>
+</head>
+<body>
+    <h2>Tree Visualizer</h2>
+    <select id="treeType">
+        <option value="BST">Binary Search Tree</option>
+        <option value="AVL">AVL Tree</option>
+        <option value="RB">Red-Black Tree</option>
+    </select>
+    <input type="number" id="nodeValue" placeholder="Enter a number">
+    <button onclick="insertNode()">Insert</button>
+    <button onclick="deleteNode()">Delete</button>
+    <button onclick="searchNode()">Search</button>
+    <svg width="900" height="500"></svg>
+    
+    <script>
+        class Node {
+            constructor(value) {
+                this.value = value;
+                this.left = null;
+                this.right = null;
+                this.height = 1;
+                this.color = "red";
+            }
+        }
+
+        class BST {
+            constructor() { this.root = null; }
+            insert(node, value) {
+                if (!node) return new Node(value);
+                if (value < node.value) node.left = this.insert(node.left, value);
+                else if (value > node.value) node.right = this.insert(node.right, value);
+                return node;
+            }
+            add(value) { this.root = this.insert(this.root, value); this.updateVisualization(); }
+            delete(node, value) {
+                if (!node) return node;
+                if (value < node.value) node.left = this.delete(node.left, value);
+                else if (value > node.value) node.right = this.delete(node.right, value);
+                else {
+                    if (!node.left) return node.right;
+                    if (!node.right) return node.left;
+                    let temp = this.findMin(node.right);
+                    node.value = temp.value;
+                    node.right = this.delete(node.right, temp.value);
+                }
+                return node;
+            }
+            remove(value) { this.root = this.delete(this.root, value); this.updateVisualization(); }
+            search(node, value) {
+                if (!node || node.value === value) return node;
+                if (value < node.value) return this.search(node.left, value);
+                return this.search(node.right, value);
+            }
+            updateVisualization(foundNode = null) { drawTree(this.root, 450, 50, 200, foundNode); }
+        }
+
+        class AVL extends BST {
+            height(node) { return node ? node.height : 0; }
+            getBalance(node) { return node ? this.height(node.left) - this.height(node.right) : 0; }
+            rotateRight(y) {
+                let x = y.left, T2 = x.right;
+                x.right = y; y.left = T2;
+                y.height = Math.max(this.height(y.left), this.height(y.right)) + 1;
+                x.height = Math.max(this.height(x.left), this.height(x.right)) + 1;
+                return x;
+            }
+            rotateLeft(x) {
+                let y = x.right, T2 = y.left;
+                y.left = x; x.right = T2;
+                x.height = Math.max(this.height(x.left), this.height(x.right)) + 1;
+                y.height = Math.max(this.height(y.left), this.height(y.right)) + 1;
+                return y;
+            }
+            insert(node, value) {
+                node = super.insert(node, value);
+                node.height = 1 + Math.max(this.height(node.left), this.height(node.right));
+                let balance = this.getBalance(node);
+                if (balance > 1 && value < node.left.value) return this.rotateRight(node);
+                if (balance < -1 && value > node.right.value) return this.rotateLeft(node);
+                if (balance > 1 && value > node.left.value) { node.left = this.rotateLeft(node.left); return this.rotateRight(node); }
+                if (balance < -1 && value < node.right.value) { node.right = this.rotateRight(node.right); return this.rotateLeft(node); }
+                return node;
+            }
+        }
+
+        class RedBlackTree extends BST {}
+
+        let trees = { "BST": new BST(), "AVL": new AVL(), "RB": new RedBlackTree() };
+
+        function insertNode() {
+            let value = parseInt(document.getElementById("nodeValue").value);
+            if (!isNaN(value)) trees[document.getElementById("treeType").value].add(value);
+            document.getElementById("nodeValue").value = "";
+        }
+
+        function deleteNode() {
+            let value = parseInt(document.getElementById("nodeValue").value);
+            if (!isNaN(value)) trees[document.getElementById("treeType").value].remove(value);
+        }
+
+        function searchNode() {
+            let value = parseInt(document.getElementById("nodeValue").value);
+            let tree = trees[document.getElementById("treeType").value];
+            let found = tree.search(tree.root, value);
+            tree.updateVisualization(found);
+            alert(found ? `Node ${value} found!` : `Node ${value} not found.`);
+        }
+
+        function drawTree(root, x, y, spacing, highlightNode = null) {
+            d3.select("svg").selectAll("*").remove();
+            function draw(node, x, y, spacing) {
+                if (!node) return;
+                let color = highlightNode && node.value === highlightNode.value ? "yellow" : "lightblue";
+                if (node.left) {
+                    d3.select("svg").append("line").attr("x1", x).attr("y1", y).attr("x2", x - spacing).attr("y2", y + 80).attr("stroke", "black");
+                    draw(node.left, x - spacing, y + 80, spacing / 2);
+                }
+                if (node.right) {
+                    d3.select("svg").append("line").attr("x1", x).attr("y1", y).attr("x2", x + spacing).attr("y2", y + 80).attr("stroke", "black");
+                    draw(node.right, x + spacing, y + 80, spacing / 2);
+                }
+                d3.select("svg").append("circle").attr("cx", x).attr("cy", y).attr("r", 20).attr("fill", color);
+                d3.select("svg").append("text").attr("x", x).attr("y", y + 5).attr("text-anchor", "middle").text(node.value);
+            }
+            draw(root, x, y, spacing);
+        }
+    </script>
+</body>
+</html>
